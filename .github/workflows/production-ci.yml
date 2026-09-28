@@ -20,6 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build backend image
         uses: docker/build-push-action@v5
         with:
@@ -63,6 +66,7 @@ jobs:
         run: |
           timeout 60 bash -c 'until curl -sf http://localhost:8000/health; do sleep 2; done'
           timeout 60 bash -c 'until curl -sf http://localhost:3000; do sleep 2; done'
+          sleep 10
 
       - name: Clone acceptance tests
         run: git clone https://github.com/MDBBee/acceptance-test-b-rag.git acceptance-tests
