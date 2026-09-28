@@ -1,0 +1,90 @@
+name: Main CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build backend image
+        run: docker build --target prod -t bobbyugbebor/b-rag-engine2:latest .
+
+      - name: Create backend env file
+        run: |
+          mkdir -p b-rag-engine2
+          cat > b-rag-engine2/.env << EOF
+          MONGODB_URI=${{ secrets.MONGODB_URI }}
+          OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
+          AUTH_SECRET=${{ secrets.AUTH_SECRET }}
+          CORS_ORIGINS=http://localhost:3000
+          AUTH_ENABLED=false
+          RATE_LIMIT_ENABLED=false
+          EOF
+
+      - name: Create frontend env file
+        run: |
+          mkdir -p b-rag-view
+          cat > b-rag-view/.env << EOF
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          AUTH_SECRET=${{ secrets.AUTH_SECRET }}
+          NEXTAUTH_URL=http://localhost:3000
+          API_URL=http://backend:8000
+          NEXT_PUBLIC_TESTING=true
+          TESTING_CODE=${{ secrets.TESTING_CODE }}
+          EOF
+
+      - name: Start services
+        run: docker compose -p b-rag up -d
+
+      - name: Wait for services
+        run: |
+          timeout 60 bash -c 'until curl -sf http://localhost:8000/health; do sleep 2; done'
+          timeout 60 bash -c 'until curl -sf http://localhost:3000; do sleep 2; done'
+
+      - name: Clone acceptance tests
+        run: git clone https://github.com/MDBBee/acceptance-test-b-rag.git acceptance-tests
+
+      - name: Create test env
+        run: |
+          cat > acceptance-tests/.env << EOF
+          BASE_URL=http://frontend:3000
+          TEST_EMAIL=${{ secrets.TEST_EMAIL }}
+          TEST_CODE=${{ secrets.TESTING_CODE }}
+          TEST_PDF_PATH=/app/data/test.pdf
+          TESTER_NAME=${{ secrets.TESTER_NAME }}
+          EOF
+
+      - name: Build acceptance test image
+        run: docker build -t b-rag-acceptance:latest acceptance-tests/
+
+      - name: Run acceptance tests
+        run: |
+          docker run --rm \
+            --network b-rag_b-rag-network \
+            --env-file acceptance-tests/.env \
+            -v ${{ github.workspace }}/results:/app/results \
+            b-rag-acceptance:latest
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot-results
+          path: results/
+
+      - name: Tear down
+        if: always()
+        run: docker compose -p b-rag down
