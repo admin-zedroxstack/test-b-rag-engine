@@ -21,7 +21,15 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Build backend image
-        run: docker build --target prod -t b-rag-engine2:latest .
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: prod
+          tags: b-rag-engine2:latest
+          push: false
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Create backend env file
         run: |
