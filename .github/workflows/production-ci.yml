@@ -59,33 +59,33 @@ jobs:
       - name: Clone acceptance tests
         run: git clone https://github.com/MDBBee/acceptance-test-b-rag.git acceptance-tests
 
-      - name: Create test env
-        run: |
-          cat > acceptance-tests/.env << EOF
-          BASE_URL=http://frontend:3000
-          TEST_EMAIL=${{ secrets.TEST_EMAIL }}
-          TEST_CODE=${{ secrets.TESTING_CODE }}
-          TEST_PDF_PATH=/app/data/test.pdf
-          TESTER_NAME=${{ secrets.TESTER_NAME }}
-          EOF
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
 
-      - name: Build acceptance test image
-        run: docker build -t b-rag-acceptance:latest acceptance-tests/
+      - name: Set up Python
+        run: uv python install 3.14
+        working-directory: ./acceptance-tests
+
+      - name: Install test dependencies
+        run: uv sync
+        working-directory: ./acceptance-tests
 
       - name: Run acceptance tests
-        run: |
-          docker run --rm \
-            --network b-rag_b-rag-network \
-            --env-file acceptance-tests/.env \
-            -v ${{ github.workspace }}/results:/app/results \
-            b-rag-acceptance:latest
+        run: uv run robot --outputdir results tests/
+        working-directory: ./acceptance-tests
+        env:
+          BASE_URL: http://localhost:3000
+          TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+          TEST_CODE: ${{ secrets.TESTING_CODE }}
+          TEST_PDF_PATH: ${{ github.workspace }}/acceptance-tests/data/attension-paper.pdf
+          TESTER_NAME: ${{ secrets.TESTER_NAME }}
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: robot-results
-          path: results/
+          path: acceptance-tests/results/
 
       - name: Tear down
         if: always()
