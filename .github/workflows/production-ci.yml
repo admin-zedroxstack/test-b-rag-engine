@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,7 +21,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Build backend image
-        run: docker build --target prod -t bobbyugbebor/b-rag-engine2:latest .
+        run: docker build --target prod -t b-rag-engine2:latest .
 
       - name: Create backend env file
         run: |
@@ -40,6 +41,7 @@ jobs:
           cat > b-rag-view/.env << EOF
           DATABASE_URL=${{ secrets.DATABASE_URL }}
           AUTH_SECRET=${{ secrets.AUTH_SECRET }}
+          AUTH_TRUST_HOST=true
           NEXTAUTH_URL=http://localhost:3000
           API_URL=http://backend:8000
           NEXT_PUBLIC_TESTING=true
